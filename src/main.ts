@@ -1,10 +1,18 @@
 import "./styles/main.css";
+import { listen } from "@tauri-apps/api/event";
 import { message } from "@tauri-apps/plugin-dialog";
-import { deleteAudioFile, importAudioFiles, renameAudioFile } from "./api/tauri";
+import {
+  deleteAudioFile,
+  importAudioFiles,
+  loadSchedulerStatus,
+  playAudioFile,
+  renameAudioFile,
+  stopAudioFile,
+} from "./api/tauri";
 import { loadInitialState, saveState } from "./state/appState";
 import { renderPresets } from "./components/Presets";
 import { renderSchedule } from "./components/Schedule";
-import type { AppState } from "./types";
+import type { AppState, SchedulerBell, SchedulerError, SchedulerStatus } from "./types";
 
 type StateUpdate = AppState | ((current: AppState) => AppState);
 
@@ -16,6 +24,12 @@ if (!appRoot) {
 
 const app = appRoot;
 let state: AppState;
+let schedulerStatus: SchedulerStatus = {
+  next: null,
+  lastFired: null,
+  lastError: null,
+};
+let schedulerEventsReady = false;
 let saveVersion = 0;
 let saveQueue = Promise.resolve();
 
@@ -119,6 +133,23 @@ async function deleteAudio(id: string, options: { render?: boolean } = {}) {
   }
 }
 
+async function previewAudio(id: string) {
+  try {
+    await playAudioFile(id);
+  } catch (error) {
+    await showError(error);
+    throw error;
+  }
+}
+
+async function stopAudioPreview() {
+  try {
+    await stopAudioFile();
+  } catch (error) {
+    await showError(error);
+  }
+}
+
 function isAudioUsed(id: string) {
   return (
     state.presets.some((preset) => Object.values(preset.sounds).includes(id)) ||
@@ -132,6 +163,69 @@ async function showError(error: unknown) {
   await message(text, { title: "Помилка", kind: "error" });
 }
 
+async function setupSchedulerEvents() {
+  if (schedulerEventsReady) return;
+
+  schedulerEventsReady = true;
+
+  await listen<SchedulerStatus>("scheduler-status", (event) => {
+    schedulerStatus = event.payload;
+    syncSchedulerStatus();
+  });
+
+  await listen<SchedulerBell>("bell-fired", (event) => {
+    schedulerStatus = {
+      ...schedulerStatus,
+      lastFired: event.payload,
+      lastError: null,
+    };
+    syncSchedulerStatus();
+  });
+
+  await listen<SchedulerError>("scheduler-error", (event) => {
+    schedulerStatus = {
+      ...schedulerStatus,
+      lastError: event.payload.message,
+    };
+    setStatus(event.payload.message, true);
+    syncSchedulerStatus();
+  });
+}
+
+function syncSchedulerStatus() {
+  const status = document.querySelector<HTMLDivElement>("[data-scheduler-status]");
+  if (!status) return;
+
+  status.innerHTML = renderSchedulerStatus();
+  status.classList.toggle("scheduler-card-error", Boolean(schedulerStatus.lastError));
+}
+
+function renderSchedulerStatus() {
+  if (schedulerStatus.lastError) {
+    return `
+      <span>Планувальник</span>
+      <strong>Помилка відтворення</strong>
+      <small>${escapeHtml(schedulerStatus.lastError)}</small>
+    `;
+  }
+
+  if (!schedulerStatus.next) {
+    return `
+      <span>Наступний дзвінок</span>
+      <strong>Немає на сьогодні</strong>
+      <small>Планувальник працює у фоні</small>
+    `;
+  }
+
+  const next = schedulerStatus.next;
+
+  return `
+    <span>Наступний дзвінок</span>
+    <strong>${escapeHtml(next.time)} · ${escapeHtml(next.eventName)}</strong>
+    <small>${escapeHtml(next.triggerLabel)} · ${escapeHtml(next.audioName)}</small>
+  `;
+}
+
 function render() {
   app.innerHTML = `
     <main class="shell">
@@ -140,7 +234,10 @@ function render() {
           <p class="eyebrow">Years Bell</p>
           <h1>Розклад шкільних дзвінків</h1>
         </div>
-        <div class="status" data-status hidden></div>
+        <div class="header-status">
+          <div class="scheduler-card" data-scheduler-status>${renderSchedulerStatus()}</div>
+          <div class="status" data-status hidden></div>
+        </div>
       </header>
       <section class="panel">
         <div class="section-heading">
@@ -175,6 +272,8 @@ function render() {
     onImportAudio: importAudio,
     onRenameAudio: renameAudio,
     onDeleteAudio: deleteAudio,
+    onPreviewAudio: previewAudio,
+    onStopPreviewAudio: stopAudioPreview,
   });
 
   renderSchedule({
@@ -185,6 +284,8 @@ function render() {
     onImportAudio: importAudio,
     onRenameAudio: renameAudio,
     onDeleteAudio: deleteAudio,
+    onPreviewAudio: previewAudio,
+    onStopPreviewAudio: stopAudioPreview,
   });
 
   app.querySelector<HTMLButtonElement>("[data-action='add-preset']")?.addEventListener("click", () => {
@@ -236,7 +337,9 @@ async function boot() {
   app.innerHTML = `<main class="shell"><div class="status">Завантаження...</div></main>`;
 
   try {
+    await setupSchedulerEvents();
     state = await loadInitialState();
+    schedulerStatus = await loadSchedulerStatus();
     render();
   } catch (error) {
     app.innerHTML = `
@@ -248,6 +351,19 @@ async function boot() {
       </main>
     `;
   }
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (character) => {
+    const entities: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    };
+    return entities[character];
+  });
 }
 
 void boot();

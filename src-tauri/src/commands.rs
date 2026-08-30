@@ -5,12 +5,20 @@ use uuid::Uuid;
 
 use crate::{
     models::{AppState, AudioFile, SoundSet},
+    scheduler::SchedulerStatus,
     state::SharedAppState,
 };
 
 #[tauri::command]
 pub async fn load_state(state: State<'_, SharedAppState>) -> Result<AppState, String> {
     Ok(state.get().await)
+}
+
+#[tauri::command]
+pub async fn scheduler_status(
+    app_state: State<'_, SharedAppState>,
+) -> Result<SchedulerStatus, String> {
+    Ok(app_state.scheduler().status().await)
 }
 
 #[tauri::command]
@@ -111,6 +119,33 @@ pub async fn delete_audio_file(
         .map_err(|error| error.to_string())?;
 
     app_state.replace(state).await
+}
+
+#[tauri::command]
+pub async fn play_audio_file(app_state: State<'_, SharedAppState>, id: Uuid) -> Result<(), String> {
+    let state = app_state.get().await;
+    let audio = state
+        .audio_library
+        .iter()
+        .find(|audio| audio.id == id)
+        .ok_or_else(|| "Композицію не знайдено".to_string())?;
+    let path = app_state
+        .storage()
+        .audio_dir()
+        .join(&audio.stored_file_name);
+
+    if !path.exists() {
+        return Err(format!("Файл '{}' не знайдено", audio.display_name));
+    }
+
+    app_state.start_audio_preview(&path)?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn stop_audio_file(app_state: State<'_, SharedAppState>) -> Result<(), String> {
+    app_state.stop_audio_preview()
 }
 
 fn validate_state(state: &AppState) -> Result<(), String> {

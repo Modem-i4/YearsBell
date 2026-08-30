@@ -8,9 +8,12 @@
     "dialog:default",
     "opener:default",
     "allow-load-state",
+    "allow-scheduler-status",
     "allow-save-state",
     "allow-import-audio-files",
     "allow-rename-audio-file",
-    "allow-delete-audio-file"
+    "allow-delete-audio-file",
+    "allow-play-audio-file",
+    "allow-stop-audio-file"
   ]
 }

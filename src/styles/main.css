@@ -100,6 +100,7 @@ select:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 24px;
   margin-bottom: 24px;
   padding: 4px 2px;
 }
@@ -152,6 +153,64 @@ h2 {
   color: #aa2d2d;
 }
 
+.header-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 300px;
+}
+
+.scheduler-card {
+  display: grid;
+  gap: 2px;
+  min-width: 260px;
+  max-width: 360px;
+  border: 1px solid rgba(210, 219, 226, 0.92);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 10px 26px rgba(64, 77, 92, 0.08);
+  transition:
+    border-color var(--motion-fast) ease,
+    background var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease;
+}
+
+.scheduler-card span {
+  color: #738094;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.scheduler-card strong {
+  overflow: hidden;
+  color: #243041;
+  font-size: 14px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scheduler-card small {
+  overflow: hidden;
+  color: #6b7989;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scheduler-card-error {
+  border-color: rgba(170, 45, 45, 0.34);
+  background: rgba(255, 247, 245, 0.9);
+}
+
+.scheduler-card-error strong,
+.scheduler-card-error small {
+  color: #aa2d2d;
+}
+
 .panel {
   margin-bottom: 22px;
   border: 1px solid rgba(210, 219, 226, 0.92);
@@ -185,17 +244,6 @@ h2 {
 .list {
   display: grid;
   gap: 12px;
-}
-
-.audio-extension {
-  align-self: center;
-  border: 1px solid #d8e2e8;
-  border-radius: 999px;
-  padding: 5px 9px;
-  color: #627286;
-  background: #f7fafb;
-  font-size: 12px;
-  font-weight: 700;
 }
 
 .compact-empty {
@@ -512,6 +560,51 @@ h3 {
 .modal-audio-row label,
 .modal-audio-row input {
   cursor: text;
+}
+
+.audio-preview-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  width: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  border-color: #d8e2e8;
+  padding: 0;
+  color: #176b87;
+  background: #f7fafb;
+  box-shadow: none;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.audio-preview-button:hover {
+  border-color: #2a9d8f;
+  color: #105c51;
+  background: #effaf7;
+  box-shadow: none;
+  transform: none;
+}
+
+.audio-preview-button span {
+  transform: translateX(1px);
+}
+
+.audio-preview-button.is-playing {
+  border-color: rgba(220, 78, 65, 0.38);
+  color: #b83f34;
+  background: #fff1ee;
+}
+
+.audio-preview-button.is-playing span {
+  transform: none;
+}
+
+.audio-preview-button.is-playing:hover {
+  border-color: rgba(220, 78, 65, 0.58);
+  color: #97352d;
+  background: #ffe6e0;
 }
 
 .sound-select-button {

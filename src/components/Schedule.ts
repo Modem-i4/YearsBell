@@ -11,6 +11,8 @@ interface ScheduleOptions {
   onImportAudio: (paths: string[], options?: { render?: boolean }) => Promise<void>;
   onRenameAudio: (id: string, displayName: string, options?: { render?: boolean }) => Promise<void>;
   onDeleteAudio: (id: string, options?: { render?: boolean }) => Promise<void>;
+  onPreviewAudio: (id: string) => Promise<void>;
+  onStopPreviewAudio: () => Promise<void>;
 }
 
 export function renderSchedule({
@@ -21,6 +23,8 @@ export function renderSchedule({
   onImportAudio,
   onRenameAudio,
   onDeleteAudio,
+  onPreviewAudio,
+  onStopPreviewAudio,
 }: ScheduleOptions) {
   if (!root) return;
 
@@ -85,6 +89,8 @@ export function renderSchedule({
         onImport: onImportAudio,
         onRename: onRenameAudio,
         onDelete: onDeleteAudio,
+        onPreview: onPreviewAudio,
+        onStopPreview: onStopPreviewAudio,
         onSelect: (audioId) => {
           onChange((current) => ({
             ...current,

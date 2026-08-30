@@ -100,6 +100,10 @@ impl Storage {
 
         Ok(())
     }
+
+    pub fn audio_dir(&self) -> PathBuf {
+        self.audio_dir.clone()
+    }
 }
 
 fn temp_path_for(path: &Path) -> PathBuf {

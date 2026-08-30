@@ -10,6 +10,8 @@ interface SoundPickerOptions {
   onImport: (paths: string[], options?: { render?: boolean }) => Promise<void>;
   onRename: (id: string, displayName: string, options?: { render?: boolean }) => Promise<void>;
   onDelete: (id: string, options?: { render?: boolean }) => Promise<void>;
+  onPreview: (id: string) => Promise<void>;
+  onStopPreview: () => Promise<void>;
 }
 
 export function renderSoundPickerButton(value: string | null, audioLibrary: AudioFile[]) {
@@ -20,10 +22,20 @@ export function renderSoundPickerButton(value: string | null, audioLibrary: Audi
   return `<button class="sound-picker-preview ${modifier}" type="button" data-sound-picker>${escapeHtml(text)}</button>`;
 }
 
-export function openSoundPicker({ value, getState, onSelect, onImport, onRename, onDelete }: SoundPickerOptions) {
+export function openSoundPicker({
+  value,
+  getState,
+  onSelect,
+  onImport,
+  onRename,
+  onDelete,
+  onPreview,
+  onStopPreview,
+}: SoundPickerOptions) {
   const overlay = document.createElement("div");
   overlay.className = "modal-backdrop";
   let selectedValue = value;
+  let previewingAudioId: string | null = null;
   let isDraggingFiles = false;
   let closed = false;
   let unlistenDrop: (() => void) | null = null;
@@ -33,6 +45,7 @@ export function openSoundPicker({ value, getState, onSelect, onImport, onRename,
     closed = true;
     document.removeEventListener("keydown", closeOnEscape);
     unlistenDrop?.();
+    void stopPreview({ renderAfter: false });
     overlay.dataset.closing = "true";
 
     const animations = overlay.getAnimations({ subtree: true });
@@ -80,7 +93,7 @@ export function openSoundPicker({ value, getState, onSelect, onImport, onRename,
             ${
               state.audioLibrary.length === 0
                 ? `<p class="empty compact-empty">Бібліотека порожня.</p>`
-                : state.audioLibrary.map((audio) => renderAudioRow(audio, selectedValue)).join("")
+                : state.audioLibrary.map((audio) => renderAudioRow(audio, selectedValue, previewingAudioId)).join("")
             }
           </div>
         </div>
@@ -135,10 +148,39 @@ export function openSoundPicker({ value, getState, onSelect, onImport, onRename,
       });
     });
 
+    overlay.querySelectorAll<HTMLButtonElement>("[data-preview-audio]").forEach((button) => {
+      button.addEventListener("click", async (event) => {
+        event.stopPropagation();
+
+        const id = button.dataset.previewAudio;
+        if (!id) return;
+
+        if (previewingAudioId === id) {
+          await stopPreview();
+          return;
+        }
+
+        previewingAudioId = null;
+        syncPreviewButtons();
+
+        try {
+          await onPreview(id);
+          previewingAudioId = id;
+        } catch {
+          previewingAudioId = null;
+        }
+
+        syncPreviewButtons();
+      });
+    });
+
     overlay.querySelectorAll<HTMLButtonElement>("[data-delete-audio]").forEach((button) => {
       button.addEventListener("click", async () => {
         const id = button.dataset.deleteAudio;
         if (!id) return;
+        if (previewingAudioId === id) {
+          await stopPreview({ renderAfter: false });
+        }
         await onDelete(id, { render: false });
         render();
       });
@@ -164,6 +206,34 @@ export function openSoundPicker({ value, getState, onSelect, onImport, onRename,
     selectedValue = audioId;
     onSelect(selectedValue);
     close();
+  }
+
+  async function stopPreview(options: { renderAfter?: boolean } = {}) {
+    if (!previewingAudioId) return;
+
+    previewingAudioId = null;
+
+    if (options.renderAfter ?? true) {
+      syncPreviewButtons();
+    }
+
+    await onStopPreview();
+  }
+
+  function syncPreviewButtons() {
+    overlay.querySelectorAll<HTMLButtonElement>("[data-preview-audio]").forEach((button) => {
+      const isPreviewing = button.dataset.previewAudio === previewingAudioId;
+      const extension = button.dataset.audioExtension ?? "";
+      const icon = button.querySelector("span");
+
+      button.classList.toggle("is-playing", isPreviewing);
+      button.setAttribute("aria-label", isPreviewing ? "Зупинити композицію" : "Прослухати композицію");
+      button.title = isPreviewing ? "Зупинити" : `Прослухати ${extension}`;
+
+      if (icon) {
+        icon.textContent = isPreviewing ? "■" : "▶";
+      }
+    });
   }
 
   async function bindNativeDrop() {
@@ -217,7 +287,11 @@ export function openSoundPicker({ value, getState, onSelect, onImport, onRename,
   }
 }
 
-function renderAudioRow(audio: AudioFile, value: string | null) {
+function renderAudioRow(audio: AudioFile, value: string | null, previewingAudioId: string | null) {
+  const isPreviewing = audio.id === previewingAudioId;
+  const previewLabel = isPreviewing ? "Зупинити композицію" : "Прослухати композицію";
+  const previewTitle = isPreviewing ? "Зупинити" : `Прослухати ${audio.extension.toUpperCase()}`;
+
   return `
     <article class="modal-audio-row ${value === audio.id ? "selected" : ""}" data-audio-row="${audio.id}" role="button" tabindex="0" aria-label="Обрати ${escapeHtml(audio.displayName)}">
       <button class="sound-select-button" type="button" data-select-audio="${audio.id}" aria-label="Обрати звук" title="Обрати звук">
@@ -226,7 +300,9 @@ function renderAudioRow(audio: AudioFile, value: string | null) {
       <label>
         <input data-audio-name="${audio.id}" value="${escapeHtml(audio.displayName)}" />
       </label>
-      <span class="audio-extension">${escapeHtml(audio.extension.toUpperCase())}</span>
+      <button class="audio-preview-button ${isPreviewing ? "is-playing" : ""}" type="button" data-preview-audio="${audio.id}" data-audio-extension="${escapeHtml(audio.extension.toUpperCase())}" aria-label="${previewLabel}" title="${escapeHtml(previewTitle)}">
+        <span aria-hidden="true">${isPreviewing ? "■" : "▶"}</span>
+      </button>
       <button class="icon-button danger-button" type="button" data-delete-audio="${audio.id}" aria-label="Видалити композицію" title="Видалити">×</button>
     </article>
   `;

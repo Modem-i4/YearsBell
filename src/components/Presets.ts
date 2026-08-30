@@ -12,6 +12,8 @@ interface PresetsOptions {
   onImportAudio: (paths: string[], options?: { render?: boolean }) => Promise<void>;
   onRenameAudio: (id: string, displayName: string, options?: { render?: boolean }) => Promise<void>;
   onDeleteAudio: (id: string, options?: { render?: boolean }) => Promise<void>;
+  onPreviewAudio: (id: string) => Promise<void>;
+  onStopPreviewAudio: () => Promise<void>;
 }
 
 export function renderPresets({
@@ -22,6 +24,8 @@ export function renderPresets({
   onImportAudio,
   onRenameAudio,
   onDeleteAudio,
+  onPreviewAudio,
+  onStopPreviewAudio,
 }: PresetsOptions) {
   if (!root) return;
 
@@ -65,6 +69,8 @@ export function renderPresets({
         onImport: onImportAudio,
         onRename: onRenameAudio,
         onDelete: onDeleteAudio,
+        onPreview: onPreviewAudio,
+        onStopPreview: onStopPreviewAudio,
         onSelect: (audioId) => {
           onChange((current) => ({
             ...current,
