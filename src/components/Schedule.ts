@@ -1,14 +1,27 @@
 import type { AppState, ScheduleEvent } from "../types";
+import { openSoundPicker, renderSoundPickerButton } from "./SoundPicker";
 
 type StateUpdate = AppState | ((current: AppState) => AppState);
 
 interface ScheduleOptions {
   root: Element | null;
   state: AppState;
+  getState: () => AppState;
   onChange: (state: StateUpdate, options?: { render?: boolean }) => void;
+  onImportAudio: (paths: string[], options?: { render?: boolean }) => Promise<void>;
+  onRenameAudio: (id: string, displayName: string, options?: { render?: boolean }) => Promise<void>;
+  onDeleteAudio: (id: string, options?: { render?: boolean }) => Promise<void>;
 }
 
-export function renderSchedule({ root, state, onChange }: ScheduleOptions) {
+export function renderSchedule({
+  root,
+  state,
+  getState,
+  onChange,
+  onImportAudio,
+  onRenameAudio,
+  onDeleteAudio,
+}: ScheduleOptions) {
   if (!root) return;
 
   if (state.schedule.length === 0) {
@@ -55,6 +68,40 @@ export function renderSchedule({ root, state, onChange }: ScheduleOptions) {
             : event,
         ),
       }));
+    });
+  });
+
+  root.querySelectorAll<HTMLButtonElement>("[data-event-sound]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const eventId = button.dataset.eventId;
+      const trigger = button.dataset.eventSound as "before3Min" | "start" | "end";
+      const scheduleEvent = state.schedule.find((item) => item.id === eventId);
+
+      if (!scheduleEvent) return;
+
+      openSoundPicker({
+        value: scheduleEvent.customSounds[trigger],
+        getState,
+        onImport: onImportAudio,
+        onRename: onRenameAudio,
+        onDelete: onDeleteAudio,
+        onSelect: (audioId) => {
+          onChange((current) => ({
+            ...current,
+            schedule: current.schedule.map((item) =>
+              item.id === eventId
+                ? {
+                    ...item,
+                    customSounds: {
+                      ...item.customSounds,
+                      [trigger]: audioId,
+                    },
+                  }
+                : item,
+            ),
+          }));
+        },
+      });
     });
   });
 
@@ -211,9 +258,37 @@ function renderEventRow(event: ScheduleEvent, state: AppState) {
         </select>
       </label>
       <button class="icon-button danger-button" type="button" data-delete-event="${event.id}" aria-label="Видалити подію" title="Видалити">×</button>
+      ${event.presetId === null ? renderCustomSoundRow(event, state) : ""}
       ${isInvalid ? `<p class="row-error" data-row-error>Початок має бути раніше за кінець.</p>` : ""}
     </article>
   `;
+}
+
+function renderCustomSoundRow(event: ScheduleEvent, state: AppState) {
+  return `
+    <div class="event-custom-sounds">
+      <label>
+        <span>За 3 хв</span>
+        ${renderEventSoundPicker(event, "before3Min", state)}
+      </label>
+      <label>
+        <span>Початок</span>
+        ${renderEventSoundPicker(event, "start", state)}
+      </label>
+      <label>
+        <span>Кінець</span>
+        ${renderEventSoundPicker(event, "end", state)}
+      </label>
+    </div>
+  `;
+}
+
+function renderEventSoundPicker(event: ScheduleEvent, trigger: "before3Min" | "start" | "end", state: AppState) {
+  const markup = renderSoundPickerButton(event.customSounds[trigger], state.audioLibrary);
+  return markup.replace(
+    "data-sound-picker",
+    `data-sound-picker data-event-id="${event.id}" data-event-sound="${trigger}"`,
+  );
 }
 
 function escapeHtml(value: string) {

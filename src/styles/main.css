@@ -1,6 +1,9 @@
 :root {
   color: #243041;
   background: #f6f8f5;
+  --motion-fast: 140ms;
+  --motion-medium: 210ms;
+  --motion-soft: cubic-bezier(0.2, 0.8, 0.2, 1);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 15px;
@@ -36,10 +39,10 @@ button {
   cursor: pointer;
   box-shadow: 0 8px 18px rgba(23, 107, 135, 0.16);
   transition:
-    background 140ms ease,
-    border-color 140ms ease,
-    box-shadow 140ms ease,
-    transform 140ms ease;
+    background var(--motion-fast) ease,
+    border-color var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease,
+    transform var(--motion-fast) ease;
 }
 
 button:hover {
@@ -68,9 +71,9 @@ select {
   color: #243041;
   background: rgba(255, 255, 255, 0.86);
   transition:
-    border-color 140ms ease,
-    box-shadow 140ms ease,
-    background 140ms ease;
+    border-color var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease,
+    background var(--motion-fast) ease;
 }
 
 input:focus,
@@ -173,6 +176,12 @@ h2 {
   font-size: 14px;
 }
 
+.section-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
 .list {
   display: grid;
   gap: 12px;
@@ -214,10 +223,10 @@ h2 {
   background: rgba(255, 255, 255, 0.9);
   box-shadow: 0 8px 24px rgba(88, 102, 118, 0.06);
   transition:
-    border-color 140ms ease,
-    box-shadow 140ms ease,
-    transform 140ms ease,
-    background 140ms ease;
+    border-color var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease,
+    transform var(--motion-fast) ease,
+    background var(--motion-fast) ease;
 }
 
 .preset-row:hover,
@@ -243,6 +252,9 @@ h2 {
 .event-row.dragging {
   opacity: 0.56;
   transform: scale(0.992);
+  transition:
+    opacity var(--motion-fast) ease,
+    transform var(--motion-fast) ease;
 }
 
 .event-row.drop-before::before,
@@ -262,6 +274,17 @@ h2 {
 
 .event-row.drop-after::after {
   bottom: -8px;
+}
+
+.event-custom-sounds {
+  grid-column: 2 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: -2px;
+  padding-top: 12px;
+  animation: reveal-custom-sounds var(--motion-medium) var(--motion-soft) both;
+  transform-origin: top center;
 }
 
 label span {
@@ -317,6 +340,12 @@ label span {
   padding: 28px;
   background: rgba(36, 48, 65, 0.24);
   backdrop-filter: blur(5px);
+  animation: modal-backdrop-in 180ms ease both;
+}
+
+.modal-backdrop[data-closing="true"] {
+  pointer-events: none;
+  animation: modal-backdrop-out var(--motion-fast) ease both;
 }
 
 .modal {
@@ -328,6 +357,13 @@ label span {
   padding: 18px;
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 24px 70px rgba(37, 51, 67, 0.2);
+  animation: modal-panel-in var(--motion-medium) var(--motion-soft) both;
+  transform-origin: center;
+  will-change: opacity, transform;
+}
+
+.modal-backdrop[data-closing="true"] .modal {
+  animation: modal-panel-out var(--motion-fast) ease both;
 }
 
 .sound-picker-modal {
@@ -457,8 +493,9 @@ h3 {
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 8px 22px rgba(88, 102, 118, 0.05);
   transition:
-    border-color 140ms ease,
-    background 140ms ease;
+    border-color var(--motion-fast) ease,
+    background var(--motion-fast) ease,
+    transform var(--motion-fast) ease;
   cursor: pointer;
 }
 
@@ -466,6 +503,10 @@ h3 {
 .modal-audio-row.selected {
   border-color: rgba(42, 157, 143, 0.44);
   background: rgba(239, 250, 247, 0.9);
+}
+
+.modal-audio-row:hover {
+  transform: translateY(-1px);
 }
 
 .modal-audio-row label,
@@ -568,9 +609,9 @@ h3 {
   line-height: 1;
   user-select: none;
   transition:
-    color 140ms ease,
-    border-color 140ms ease,
-    background 140ms ease;
+    color var(--motion-fast) ease,
+    border-color var(--motion-fast) ease,
+    background var(--motion-fast) ease;
 }
 
 .drag-handle:hover {
@@ -587,4 +628,66 @@ h3 {
   grid-column: 2 / -1;
   margin: -4px 0 0;
   font-size: 13px;
+  animation: soft-message-in var(--motion-medium) var(--motion-soft) both;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--motion-medium);
+  animation-timing-function: var(--motion-soft);
+}
+
+@keyframes modal-backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes modal-backdrop-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes modal-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+}
+
+@keyframes modal-panel-out {
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+}
+
+@keyframes reveal-custom-sounds {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scaleY(0.96);
+  }
+}
+
+@keyframes soft-message-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+  }
+
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 1ms;
+  }
 }

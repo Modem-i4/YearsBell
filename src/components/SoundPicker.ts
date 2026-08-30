@@ -33,7 +33,15 @@ export function openSoundPicker({ value, getState, onSelect, onImport, onRename,
     closed = true;
     document.removeEventListener("keydown", closeOnEscape);
     unlistenDrop?.();
-    overlay.remove();
+    overlay.dataset.closing = "true";
+
+    const animations = overlay.getAnimations({ subtree: true });
+    if (animations.length === 0 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      overlay.remove();
+      return;
+    }
+
+    void Promise.allSettled(animations.map((animation) => animation.finished)).then(() => overlay.remove());
   };
 
   overlay.addEventListener("click", (event) => {

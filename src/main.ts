@@ -39,9 +39,22 @@ function requestSave() {
 function updateState(update: StateUpdate, options: { render?: boolean } = {}) {
   state = typeof update === "function" ? update(state) : update;
   if (options.render ?? true) {
-    render();
+    renderWithTransition();
   }
   requestSave();
+}
+
+function renderWithTransition() {
+  const documentWithTransition = document as Document & {
+    startViewTransition?: (callback: () => void) => void;
+  };
+
+  if (!documentWithTransition.startViewTransition || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    render();
+    return;
+  }
+
+  documentWithTransition.startViewTransition(() => render());
 }
 
 function setStatus(text: string, isError = false) {
@@ -145,9 +158,11 @@ function render() {
             <h2>Розклад</h2>
             <p>Події розкладу зі звуком. Уроки, обіди, хвилина мовчання.</p>
           </div>
-          <button class="add-button" type="button" data-action="add-event" aria-label="Нова подія" title="Нова подія"><span aria-hidden="true">+</span></button>
         </div>
         <div data-schedule></div>
+        <div class="section-footer">
+          <button class="add-button" type="button" data-action="add-event" aria-label="Нова подія" title="Нова подія"><span aria-hidden="true">+</span></button>
+        </div>
       </section>
     </main>
   `;
@@ -165,7 +180,11 @@ function render() {
   renderSchedule({
     root: app.querySelector("[data-schedule]"),
     state,
+    getState: () => state,
     onChange: updateState,
+    onImportAudio: importAudio,
+    onRenameAudio: renameAudio,
+    onDeleteAudio: deleteAudio,
   });
 
   app.querySelector<HTMLButtonElement>("[data-action='add-preset']")?.addEventListener("click", () => {
@@ -187,26 +206,28 @@ function render() {
     });
   });
 
-  app.querySelector<HTMLButtonElement>("[data-action='add-event']")?.addEventListener("click", () => {
-    const nextOrder = state.schedule.length;
-    updateState({
-      ...state,
-      schedule: [
-        ...state.schedule,
-        {
-          id: crypto.randomUUID(),
-          name: `${nextOrder + 1} урок`,
-          startTime: "08:30",
-          endTime: "09:15",
-          order: nextOrder,
-          presetId: state.presets[0]?.id ?? null,
-          customSounds: {
-            before3Min: null,
-            start: null,
-            end: null,
+  app.querySelectorAll<HTMLButtonElement>("[data-action='add-event']").forEach((button) => {
+    button.addEventListener("click", () => {
+      const nextOrder = state.schedule.length;
+      updateState({
+        ...state,
+        schedule: [
+          ...state.schedule,
+          {
+            id: crypto.randomUUID(),
+            name: `${nextOrder + 1} урок`,
+            startTime: "08:30",
+            endTime: "09:15",
+            order: nextOrder,
+            presetId: state.presets[0]?.id ?? null,
+            customSounds: {
+              before3Min: null,
+              start: null,
+              end: null,
+            },
           },
-        },
-      ],
+        ],
+      });
     });
   });
 }
