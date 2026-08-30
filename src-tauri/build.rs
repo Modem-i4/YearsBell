@@ -9,6 +9,8 @@ fn main() {
             "delete_audio_file",
             "play_audio_file",
             "stop_audio_file",
+            "export_config",
+            "import_config",
         ]),
     ))
     .expect("failed to run tauri build script");

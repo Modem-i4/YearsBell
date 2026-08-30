@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::{
     audio,
-    models::{AppState, AudioFile, ScheduleEvent, SoundSet},
+    models::{AppState, AudioFile, ScheduleEvent, ScheduleSoundMode, SoundSet},
 };
 
 const TICK_INTERVAL: Duration = Duration::from_millis(500);
@@ -258,7 +258,9 @@ fn scheduled_bells(state: &AppState, audio_dir: &PathBuf, date: NaiveDate) -> Ve
             continue;
         }
 
-        let sounds = event_sounds(state, event);
+        let Some(sounds) = event_sounds(state, event) else {
+            continue;
+        };
         let start_second = i64::from(start_time.num_seconds_from_midnight());
         let end_second = i64::from(end_time.num_seconds_from_midnight());
 
@@ -345,12 +347,15 @@ fn push_pending_bell(
     });
 }
 
-fn event_sounds<'a>(state: &'a AppState, event: &'a ScheduleEvent) -> &'a SoundSet {
-    event
-        .preset_id
-        .and_then(|preset_id| state.presets.iter().find(|preset| preset.id == preset_id))
-        .map(|preset| &preset.sounds)
-        .unwrap_or(&event.custom_sounds)
+fn event_sounds<'a>(state: &'a AppState, event: &'a ScheduleEvent) -> Option<&'a SoundSet> {
+    match event.sound_mode {
+        ScheduleSoundMode::Preset => event
+            .preset_id
+            .and_then(|preset_id| state.presets.iter().find(|preset| preset.id == preset_id))
+            .map(|preset| &preset.sounds),
+        ScheduleSoundMode::None => None,
+        ScheduleSoundMode::Custom => Some(&event.custom_sounds),
+    }
 }
 
 fn parse_time(value: &str) -> Option<NaiveTime> {

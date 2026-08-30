@@ -98,7 +98,7 @@ export function renderPresets({
 
       if (!preset) return;
 
-      const isUsed = state.schedule.some((event) => event.presetId === id);
+      const isUsed = state.schedule.some((event) => event.soundMode === "preset" && event.presetId === id);
 
       if (isUsed) {
         const confirmed = await confirm(
@@ -123,6 +123,7 @@ export function renderPresets({
           event.presetId === id
             ? {
                 ...event,
+                soundMode: "custom",
                 presetId: null,
                 customSounds: { ...preset.sounds },
               }

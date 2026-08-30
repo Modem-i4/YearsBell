@@ -1,9 +1,11 @@
 import "./styles/main.css";
 import { listen } from "@tauri-apps/api/event";
-import { message } from "@tauri-apps/plugin-dialog";
+import { confirm, message, open, save } from "@tauri-apps/plugin-dialog";
 import {
   deleteAudioFile,
+  exportConfig,
   importAudioFiles,
+  importConfig,
   loadSchedulerStatus,
   playAudioFile,
   renameAudioFile,
@@ -34,6 +36,12 @@ let saveVersion = 0;
 let saveQueue = Promise.resolve();
 
 function requestSave() {
+  if (stateHasInvalidScheduleIntervals(state)) {
+    setStatus("");
+    return;
+  }
+
+  const stateToSave = state;
   const version = ++saveVersion;
 
   saveQueue = saveQueue.then(async () => {
@@ -42,7 +50,7 @@ function requestSave() {
     }
 
     try {
-      await saveState(state);
+      await saveState(stateToSave);
       setStatus("");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Не вдалося зберегти дані", true);
@@ -56,6 +64,10 @@ function updateState(update: StateUpdate, options: { render?: boolean } = {}) {
     renderWithTransition();
   }
   requestSave();
+}
+
+function stateHasInvalidScheduleIntervals(value: AppState) {
+  return value.schedule.some((event) => event.startTime >= event.endTime);
 }
 
 function renderWithTransition() {
@@ -150,6 +162,58 @@ async function stopAudioPreview() {
   }
 }
 
+async function exportConfigArchive() {
+  const path = await save({
+    defaultPath: "years-bell-config.zip",
+    filters: [{ name: "ZIP", extensions: ["zip"] }],
+  });
+
+  if (!path) return;
+
+  try {
+    await exportConfig(path);
+    await message("Конфігурацію експортовано.", {
+      title: "Years Bell",
+      kind: "info",
+    });
+  } catch (error) {
+    await showError(error);
+  }
+}
+
+async function importConfigArchive() {
+  const selected = await open({
+    multiple: false,
+    filters: [{ name: "ZIP", extensions: ["zip"] }],
+  });
+  const path = typeof selected === "string" ? selected : null;
+
+  if (!path) return;
+
+  const confirmed = await confirm(
+    "Імпорт перезапише поточний розклад, пресети й бібліотеку звуків. Продовжити?",
+    {
+      title: "Імпорт конфігурації",
+      kind: "warning",
+      okLabel: "Імпортувати",
+      cancelLabel: "Скасувати",
+    },
+  );
+
+  if (!confirmed) return;
+
+  try {
+    state = await importConfig(path);
+    renderWithTransition();
+    await message("Конфігурацію імпортовано. Поточні дані перезаписано.", {
+      title: "Years Bell",
+      kind: "info",
+    });
+  } catch (error) {
+    await showError(error);
+  }
+}
+
 function isAudioUsed(id: string) {
   return (
     state.presets.some((preset) => Object.values(preset.sounds).includes(id)) ||
@@ -235,6 +299,15 @@ function render() {
           <h1>Розклад шкільних дзвінків</h1>
         </div>
         <div class="header-status">
+          <div class="transfer-island">
+            <button class="transfer-button" type="button" data-transfer-menu aria-label="Імпорт та експорт конфігурації" title="Імпорт / експорт">
+              ${renderTransferIcon()}
+            </button>
+            <div class="transfer-menu" data-transfer-popover hidden>
+              <button type="button" data-action="import-presets">Імпортувати</button>
+              <button type="button" data-action="export-presets">Експортувати</button>
+            </div>
+          </div>
           <div class="scheduler-card" data-scheduler-status>${renderSchedulerStatus()}</div>
           <div class="status" data-status hidden></div>
         </div>
@@ -320,6 +393,7 @@ function render() {
             startTime: "08:30",
             endTime: "09:15",
             order: nextOrder,
+            soundMode: state.presets[0] ? "preset" : "none",
             presetId: state.presets[0]?.id ?? null,
             customSounds: {
               before3Min: null,
@@ -331,6 +405,53 @@ function render() {
       });
     });
   });
+
+  const transferIsland = app.querySelector<HTMLElement>(".transfer-island");
+  const transferMenuButton = app.querySelector<HTMLButtonElement>("[data-transfer-menu]");
+  const transferMenu = app.querySelector<HTMLElement>("[data-transfer-popover]");
+
+  transferIsland?.addEventListener("click", (event) => {
+    event.stopPropagation();
+  });
+
+  transferMenuButton?.addEventListener("click", () => {
+    if (!transferMenu) return;
+
+    transferMenu.hidden = !transferMenu.hidden;
+
+    if (!transferMenu.hidden) {
+      document.addEventListener(
+        "click",
+        () => {
+          transferMenu.hidden = true;
+        },
+        { once: true },
+      );
+    }
+  });
+
+  app.querySelector<HTMLButtonElement>("[data-action='import-presets']")?.addEventListener("click", async () => {
+    if (transferMenu) {
+      transferMenu.hidden = true;
+    }
+    await importConfigArchive();
+  });
+
+  app.querySelector<HTMLButtonElement>("[data-action='export-presets']")?.addEventListener("click", async () => {
+    if (transferMenu) {
+      transferMenu.hidden = true;
+    }
+    await exportConfigArchive();
+  });
+}
+
+function renderTransferIcon() {
+  return `
+    <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+      <path d="M7 7h10M7 17h10" />
+      <path d="M14 4l3 3-3 3M10 14l-3 3 3 3" />
+    </svg>
+  `;
 }
 
 async function boot() {

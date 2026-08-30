@@ -43,8 +43,9 @@ impl Storage {
 
         let raw = fs::read_to_string(&self.state_path)
             .with_context(|| format!("unable to read {}", self.state_path.display()))?;
-        let state = serde_json::from_str::<AppState>(&raw)
+        let mut state = serde_json::from_str::<AppState>(&raw)
             .with_context(|| format!("unable to parse {}", self.state_path.display()))?;
+        state.normalize();
 
         Ok(state)
     }
@@ -103,6 +104,30 @@ impl Storage {
 
     pub fn audio_dir(&self) -> PathBuf {
         self.audio_dir.clone()
+    }
+
+    pub fn replace_audio_files(&self, files: &[(String, Vec<u8>)]) -> Result<()> {
+        fs::create_dir_all(&self.audio_dir)
+            .with_context(|| format!("unable to create {}", self.audio_dir.display()))?;
+
+        for entry in fs::read_dir(&self.audio_dir)
+            .with_context(|| format!("unable to read {}", self.audio_dir.display()))?
+        {
+            let entry = entry.context("unable to read audio directory entry")?;
+            let file_type = entry.file_type().context("unable to read file type")?;
+
+            if file_type.is_file() || file_type.is_symlink() {
+                fs::remove_file(entry.path()).context("unable to delete existing audio file")?;
+            }
+        }
+
+        for (stored_file_name, bytes) in files {
+            let destination = self.audio_dir.join(stored_file_name);
+            fs::write(&destination, bytes)
+                .with_context(|| format!("unable to write audio file {}", destination.display()))?;
+        }
+
+        Ok(())
     }
 }
 

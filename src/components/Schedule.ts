@@ -1,7 +1,9 @@
-import type { AppState, ScheduleEvent } from "../types";
+import type { AppState, ScheduleEvent, ScheduleSoundMode, SoundSet } from "../types";
 import { openSoundPicker, renderSoundPickerButton } from "./SoundPicker";
 
 type StateUpdate = AppState | ((current: AppState) => AppState);
+
+const visibleTimeErrorEventIds = new Set<string>();
 
 interface ScheduleOptions {
   root: Element | null;
@@ -36,7 +38,7 @@ export function renderSchedule({
   const sorted = [...state.schedule].sort((left, right) => left.order - right.order);
   root.innerHTML = `
     <div class="list schedule-list" data-schedule-list>
-      ${sorted.map((event) => renderEventRow(event, state)).join("")}
+      ${sorted.map((event) => renderEventRow(event, state, visibleTimeErrorEventIds.has(event.id))).join("")}
     </div>
   `;
 
@@ -53,8 +55,42 @@ export function renderSchedule({
       );
 
       if (field === "startTime" || field === "endTime") {
-        syncEventRowValidity(input.closest<HTMLElement>("[data-event-row]"));
+        const row = input.closest<HTMLElement>("[data-event-row]");
+
+        visibleTimeErrorEventIds.delete(id ?? "");
+        syncEventRowValidity(row, false);
       }
+    });
+
+    input.addEventListener("focus", () => {
+      const id = input.dataset.eventId;
+      const field = input.dataset.eventField;
+
+      if (field !== "startTime" && field !== "endTime") return;
+
+      visibleTimeErrorEventIds.delete(id ?? "");
+      syncEventRowValidity(input.closest<HTMLElement>("[data-event-row]"), false);
+    });
+  });
+
+  root.querySelectorAll<HTMLElement>("[data-event-row]").forEach((row) => {
+    row.addEventListener("focusout", () => {
+      window.setTimeout(() => {
+        if (focusIsInsideEventEditingSurface(row)) {
+          return;
+        }
+
+        const id = row.dataset.eventRow;
+        const shouldShowError = rowHasInvalidTime(row);
+
+        if (id && shouldShowError) {
+          visibleTimeErrorEventIds.add(id);
+        } else if (id) {
+          visibleTimeErrorEventIds.delete(id);
+        }
+
+        syncEventRowValidity(row, shouldShowError);
+      });
     });
   });
 
@@ -67,7 +103,7 @@ export function renderSchedule({
           event.id === id
             ? {
                 ...event,
-                presetId: select.value === "none" ? null : select.value,
+                ...soundSelectionFromValue(select.value, event.customSounds),
             }
             : event,
         ),
@@ -102,6 +138,8 @@ export function renderSchedule({
                       ...item.customSounds,
                       [trigger]: audioId,
                     },
+                    soundMode: "custom",
+                    presetId: null,
                   }
                 : item,
             ),
@@ -114,15 +152,21 @@ export function renderSchedule({
   root.querySelectorAll<HTMLButtonElement>("[data-delete-event]").forEach((button) => {
     button.addEventListener("click", () => {
       const id = button.dataset.deleteEvent;
-      onChange((current) => ({
-        ...current,
-        schedule: current.schedule
-          .filter((event) => event.id !== id)
-          .map((event, index) => ({
-            ...event,
-            order: index,
-          })),
-      }));
+      onChange((current) => {
+        if (id) {
+          visibleTimeErrorEventIds.delete(id);
+        }
+
+        return {
+          ...current,
+          schedule: current.schedule
+            .filter((event) => event.id !== id)
+            .map((event, index) => ({
+              ...event,
+              order: index,
+            })),
+        };
+      });
     });
   });
 
@@ -131,50 +175,74 @@ export function renderSchedule({
 
 function wireDragAndDrop(root: Element, onChange: ScheduleOptions["onChange"]) {
   let draggedId: string | null = null;
+  let dropTargetId: string | null = null;
+  let dropAfter = false;
+
+  function updateDropTarget(pointerX: number, pointerY: number) {
+    if (!draggedId) return;
+
+    const target = document.elementFromPoint(pointerX, pointerY)?.closest<HTMLElement>("[data-event-row]");
+    clearDropMarkers(root, true);
+
+    if (!target || !root.contains(target) || target.dataset.eventRow === draggedId) {
+      dropTargetId = null;
+      return;
+    }
+
+    dropTargetId = target.dataset.eventRow ?? null;
+    dropAfter = isAfterMiddle(target, pointerY);
+    target.classList.add(dropAfter ? "drop-after" : "drop-before");
+  }
+
+  function stopDragging() {
+    draggedId = null;
+    dropTargetId = null;
+    document.body.classList.remove("is-reordering");
+    clearDropMarkers(root);
+    document.removeEventListener("pointermove", handlePointerMove);
+    document.removeEventListener("pointerup", handlePointerUp);
+    document.removeEventListener("pointercancel", handlePointerCancel);
+  }
+
+  function handlePointerMove(event: PointerEvent) {
+    updateDropTarget(event.clientX, event.clientY);
+  }
+
+  function handlePointerUp(event: PointerEvent) {
+    updateDropTarget(event.clientX, event.clientY);
+
+    const sourceId = draggedId;
+    const targetId = dropTargetId;
+    const placeAfter = dropAfter;
+
+    stopDragging();
+
+    if (!sourceId || !targetId || sourceId === targetId) {
+      return;
+    }
+
+    onChange((current) => reorderEvents(current, sourceId, targetId, placeAfter));
+  }
+
+  function handlePointerCancel() {
+    stopDragging();
+  }
 
   root.querySelectorAll<HTMLElement>("[data-drag-handle]").forEach((handle) => {
-    handle.addEventListener("dragstart", (event) => {
+    handle.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || !event.isPrimary) return;
+
       draggedId = handle.dataset.dragHandle ?? null;
       const row = handle.closest<HTMLElement>("[data-event-row]");
 
+      if (!draggedId || !row) return;
+
+      event.preventDefault();
       row?.classList.add("dragging");
-      event.dataTransfer?.setData("text/plain", draggedId ?? "");
-      if (event.dataTransfer) {
-        event.dataTransfer.effectAllowed = "move";
-      }
-    });
-
-    handle.addEventListener("dragend", () => {
-      draggedId = null;
-      clearDropMarkers(root);
-    });
-  });
-
-  root.querySelectorAll<HTMLElement>("[data-event-row]").forEach((row) => {
-    row.addEventListener("dragover", (event) => {
-      event.preventDefault();
-      if (!draggedId || row.dataset.eventRow === draggedId) return;
-
-      clearDropMarkers(root);
-      row.classList.add(isAfterMiddle(row, event.clientY) ? "drop-after" : "drop-before");
-      if (event.dataTransfer) {
-        event.dataTransfer.dropEffect = "move";
-      }
-    });
-
-    row.addEventListener("drop", (event) => {
-      event.preventDefault();
-      const sourceId = draggedId ?? event.dataTransfer?.getData("text/plain") ?? null;
-      const targetId = row.dataset.eventRow ?? null;
-      const placeAfter = isAfterMiddle(row, event.clientY);
-
-      clearDropMarkers(root);
-
-      if (!sourceId || !targetId || sourceId === targetId) {
-        return;
-      }
-
-      onChange((current) => reorderEvents(current, sourceId, targetId, placeAfter));
+      document.body.classList.add("is-reordering");
+      document.addEventListener("pointermove", handlePointerMove);
+      document.addEventListener("pointerup", handlePointerUp);
+      document.addEventListener("pointercancel", handlePointerCancel);
     });
   });
 }
@@ -204,9 +272,13 @@ function reorderEvents(state: AppState, sourceId: string, targetId: string, plac
   };
 }
 
-function clearDropMarkers(root: Element) {
+function clearDropMarkers(root: Element, keepDragging = false) {
   root.querySelectorAll("[data-event-row]").forEach((row) => {
-    row.classList.remove("dragging", "drop-before", "drop-after");
+    row.classList.remove("drop-before", "drop-after");
+
+    if (!keepDragging) {
+      row.classList.remove("dragging");
+    }
   });
 }
 
@@ -215,17 +287,31 @@ function isAfterMiddle(row: HTMLElement, pointerY: number) {
   return pointerY > rect.top + rect.height / 2;
 }
 
-function syncEventRowValidity(row: HTMLElement | null) {
-  if (!row) return;
+function focusIsInsideEventEditingSurface(row: HTMLElement) {
+  const activeElement = document.activeElement;
 
+  return Boolean(
+    activeElement instanceof HTMLElement &&
+      (row.contains(activeElement) || activeElement.closest(".modal")),
+  );
+}
+
+function rowHasInvalidTime(row: HTMLElement) {
   const startTime = row.querySelector<HTMLInputElement>("[data-event-field='startTime']")?.value ?? "";
   const endTime = row.querySelector<HTMLInputElement>("[data-event-field='endTime']")?.value ?? "";
-  const isInvalid = startTime >= endTime;
+
+  return startTime >= endTime;
+}
+
+function syncEventRowValidity(row: HTMLElement | null, showError: boolean) {
+  if (!row) return;
+
+  const isInvalid = rowHasInvalidTime(row);
   let error = row.querySelector<HTMLParagraphElement>("[data-row-error]");
 
-  row.classList.toggle("invalid", isInvalid);
+  row.classList.toggle("invalid", isInvalid && showError);
 
-  if (isInvalid && !error) {
+  if (isInvalid && showError && !error) {
     error = document.createElement("p");
     error.className = "row-error";
     error.dataset.rowError = "time";
@@ -233,17 +319,19 @@ function syncEventRowValidity(row: HTMLElement | null) {
     row.append(error);
   }
 
-  if (!isInvalid) {
+  if (!isInvalid || !showError) {
     error?.remove();
   }
 }
 
-function renderEventRow(event: ScheduleEvent, state: AppState) {
+function renderEventRow(event: ScheduleEvent, state: AppState, showTimeError: boolean) {
   const isInvalid = event.startTime >= event.endTime;
+  const shouldShowTimeError = isInvalid && showTimeError;
+  const soundSelection = soundSelectionValue(event);
 
   return `
-    <article class="event-row ${isInvalid ? "invalid" : ""}" data-event-row="${event.id}">
-      <div class="drag-handle" draggable="true" data-drag-handle="${event.id}" aria-label="Перемістити подію" title="Перемістити">⋮⋮</div>
+    <article class="event-row ${shouldShowTimeError ? "invalid" : ""}" data-event-row="${event.id}">
+      <div class="drag-handle" data-drag-handle="${event.id}" aria-label="Перемістити подію" title="Перемістити">⋮⋮</div>
       <label>
         <span>Подія</span>
         <input data-event-id="${event.id}" data-event-field="name" value="${escapeHtml(event.name)}" />
@@ -259,15 +347,59 @@ function renderEventRow(event: ScheduleEvent, state: AppState) {
       <label>
         <span>Пресет</span>
         <select data-preset-select="${event.id}">
-          <option value="none" ${event.presetId === null ? "selected" : ""}>Без пресета</option>
-          ${state.presets.map((preset) => `<option value="${preset.id}" ${event.presetId === preset.id ? "selected" : ""}>${escapeHtml(preset.name)}</option>`).join("")}
+          <option value="none" ${soundSelection === "none" ? "selected" : ""}>Без звуку</option>
+          <option value="custom" ${soundSelection === "custom" ? "selected" : ""}>Свій звук</option>
+          ${state.presets.map((preset) => `<option value="${preset.id}" ${soundSelection === preset.id ? "selected" : ""}>${escapeHtml(preset.name)}</option>`).join("")}
         </select>
       </label>
       <button class="icon-button danger-button" type="button" data-delete-event="${event.id}" aria-label="Видалити подію" title="Видалити">×</button>
-      ${event.presetId === null ? renderCustomSoundRow(event, state) : ""}
-      ${isInvalid ? `<p class="row-error" data-row-error>Початок має бути раніше за кінець.</p>` : ""}
+      ${event.soundMode === "custom" ? renderCustomSoundRow(event, state) : ""}
+      ${shouldShowTimeError ? `<p class="row-error" data-row-error>Початок має бути раніше за кінець.</p>` : ""}
     </article>
   `;
+}
+
+function soundSelectionValue(event: ScheduleEvent) {
+  if (event.soundMode === "none" || event.soundMode === "custom") {
+    return event.soundMode;
+  }
+
+  return event.presetId ?? "none";
+}
+
+function soundSelectionFromValue(
+  value: string,
+  currentCustomSounds: SoundSet,
+): { soundMode: ScheduleSoundMode; presetId: string | null; customSounds: SoundSet } {
+  if (value === "none") {
+    return {
+      soundMode: "none",
+      presetId: null,
+      customSounds: emptySoundSet(),
+    };
+  }
+
+  if (value === "custom") {
+    return {
+      soundMode: "custom",
+      presetId: null,
+      customSounds: currentCustomSounds,
+    };
+  }
+
+  return {
+    soundMode: "preset",
+    presetId: value,
+    customSounds: emptySoundSet(),
+  };
+}
+
+function emptySoundSet(): SoundSet {
+  return {
+    before3Min: null,
+    start: null,
+    end: null,
+  };
 }
 
 function renderCustomSoundRow(event: ScheduleEvent, state: AppState) {

@@ -32,3 +32,11 @@ export async function playAudioFile(id: string): Promise<void> {
 export async function stopAudioFile(): Promise<void> {
   return invoke<void>("stop_audio_file");
 }
+
+export async function exportConfig(path: string): Promise<void> {
+  return invoke<void>("export_config", { path });
+}
+
+export async function importConfig(path: string): Promise<AppState> {
+  return invoke<AppState>("import_config", { path });
+}

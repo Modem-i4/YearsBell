@@ -1,4 +1,5 @@
 export type TriggerType = "before3Min" | "start" | "end";
+export type ScheduleSoundMode = "preset" | "none" | "custom";
 
 export interface SoundSet {
   before3Min: string | null;
@@ -25,6 +26,7 @@ export interface ScheduleEvent {
   startTime: string;
   endTime: string;
   order: number;
+  soundMode: ScheduleSoundMode;
   presetId: string | null;
   customSounds: SoundSet;
 }

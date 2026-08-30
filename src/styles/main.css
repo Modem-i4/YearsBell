@@ -23,6 +23,11 @@ body {
     #f6f8f5;
 }
 
+body.is-reordering {
+  cursor: grabbing;
+  user-select: none;
+}
+
 button,
 input,
 select {
@@ -160,6 +165,88 @@ h2 {
   min-width: 300px;
 }
 
+.transfer-island {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(210, 219, 226, 0.92);
+  border-radius: 12px;
+  padding: 7px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 10px 26px rgba(64, 77, 92, 0.08);
+}
+
+.transfer-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  border-color: rgba(42, 157, 143, 0.28);
+  padding: 0;
+  color: #176b87;
+  background: #f6fbfa;
+  box-shadow: none;
+}
+
+.transfer-button:hover {
+  border-color: rgba(42, 157, 143, 0.52);
+  color: #105c51;
+  background: #eaf8f5;
+  box-shadow: none;
+}
+
+.transfer-button svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.transfer-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 20;
+  display: grid;
+  gap: 5px;
+  min-width: 164px;
+  border: 1px solid rgba(210, 219, 226, 0.94);
+  border-radius: 10px;
+  padding: 7px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 18px 38px rgba(45, 58, 74, 0.16);
+  animation: menu-enter var(--motion-medium) var(--motion-soft);
+}
+
+.transfer-menu[hidden] {
+  display: none;
+}
+
+.transfer-menu button {
+  justify-content: flex-start;
+  min-height: 34px;
+  border-color: transparent;
+  padding: 0 10px;
+  color: #263445;
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+}
+
+.transfer-menu button:hover {
+  border-color: rgba(42, 157, 143, 0.16);
+  color: #105c51;
+  background: #effaf7;
+  box-shadow: none;
+  transform: none;
+}
+
 .scheduler-card {
   display: grid;
   gap: 2px;
@@ -209,6 +296,18 @@ h2 {
 .scheduler-card-error strong,
 .scheduler-card-error small {
   color: #aa2d2d;
+}
+
+@keyframes menu-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .panel {
@@ -298,7 +397,7 @@ h2 {
 }
 
 .event-row.dragging {
-  opacity: 0.56;
+  opacity: 0.28;
   transform: scale(0.992);
   transition:
     opacity var(--motion-fast) ease,
@@ -700,6 +799,7 @@ h3 {
   cursor: grab;
   font-size: 21px;
   line-height: 1;
+  touch-action: none;
   user-select: none;
   transition:
     color var(--motion-fast) ease,

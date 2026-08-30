@@ -1,5 +1,6 @@
 mod audio;
 mod commands;
+mod import_export;
 mod models;
 mod scheduler;
 mod state;
@@ -33,7 +34,9 @@ pub fn run() {
             commands::rename_audio_file,
             commands::delete_audio_file,
             commands::play_audio_file,
-            commands::stop_audio_file
+            commands::stop_audio_file,
+            commands::export_config,
+            commands::import_config
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Years Bell");

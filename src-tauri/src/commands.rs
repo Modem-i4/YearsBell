@@ -4,7 +4,8 @@ use tauri::State;
 use uuid::Uuid;
 
 use crate::{
-    models::{AppState, AudioFile, SoundSet},
+    import_export,
+    models::{AppState, AudioFile, ScheduleSoundMode, SoundSet},
     scheduler::SchedulerStatus,
     state::SharedAppState,
 };
@@ -24,8 +25,9 @@ pub async fn scheduler_status(
 #[tauri::command]
 pub async fn save_state(
     app_state: State<'_, SharedAppState>,
-    state: AppState,
+    mut state: AppState,
 ) -> Result<AppState, String> {
+    state.normalize();
     validate_state(&state)?;
     app_state.replace(state).await
 }
@@ -148,6 +150,31 @@ pub async fn stop_audio_file(app_state: State<'_, SharedAppState>) -> Result<(),
     app_state.stop_audio_preview()
 }
 
+#[tauri::command]
+pub async fn export_config(
+    app_state: State<'_, SharedAppState>,
+    path: String,
+) -> Result<(), String> {
+    let state = app_state.get().await;
+
+    import_export::export_config(&state, app_state.storage(), &PathBuf::from(path))
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn import_config(
+    app_state: State<'_, SharedAppState>,
+    path: String,
+) -> Result<AppState, String> {
+    let mut state = app_state.get().await;
+
+    import_export::import_config(&mut state, app_state.storage(), &PathBuf::from(path))
+        .map_err(|error| error.to_string())?;
+    state.normalize();
+    validate_state(&state)?;
+    app_state.replace(state).await
+}
+
 fn validate_state(state: &AppState) -> Result<(), String> {
     if state.version != 1 {
         return Err(format!("Unsupported app-state version: {}", state.version));
@@ -161,16 +188,24 @@ fn validate_state(state: &AppState) -> Result<(), String> {
             ));
         }
 
-        if let Some(preset_id) = event.preset_id {
-            if !state.presets.iter().any(|preset| preset.id == preset_id) {
-                return Err(format!(
-                    "Подія '{}' посилається на відсутній пресет",
-                    event.name
-                ));
+        match event.sound_mode {
+            ScheduleSoundMode::Preset => {
+                let preset_id = event
+                    .preset_id
+                    .ok_or_else(|| format!("Подія '{}' не має вибраного пресета", event.name))?;
+
+                if !state.presets.iter().any(|preset| preset.id == preset_id) {
+                    return Err(format!(
+                        "Подія '{}' посилається на відсутній пресет",
+                        event.name
+                    ));
+                }
+            }
+            ScheduleSoundMode::None => {}
+            ScheduleSoundMode::Custom => {
+                validate_sound_references(state, &event.custom_sounds)?;
             }
         }
-
-        validate_sound_references(state, &event.custom_sounds)?;
     }
 
     for preset in &state.presets {
@@ -215,6 +250,7 @@ fn audio_is_used(state: &AppState, id: Uuid) -> bool {
         || state
             .schedule
             .iter()
+            .filter(|event| event.sound_mode == ScheduleSoundMode::Custom)
             .any(|event| sound_set_contains(&event.custom_sounds, id))
 }
 
