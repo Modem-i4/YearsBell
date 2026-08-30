@@ -34,6 +34,10 @@ export function renderSchedule({ root, state, onChange }: ScheduleOptions) {
         }),
         { render: false },
       );
+
+      if (field === "startTime" || field === "endTime") {
+        syncEventRowValidity(input.closest<HTMLElement>("[data-event-row]"));
+      }
     });
   });
 
@@ -158,6 +162,29 @@ function isAfterMiddle(row: HTMLElement, pointerY: number) {
   return pointerY > rect.top + rect.height / 2;
 }
 
+function syncEventRowValidity(row: HTMLElement | null) {
+  if (!row) return;
+
+  const startTime = row.querySelector<HTMLInputElement>("[data-event-field='startTime']")?.value ?? "";
+  const endTime = row.querySelector<HTMLInputElement>("[data-event-field='endTime']")?.value ?? "";
+  const isInvalid = startTime >= endTime;
+  let error = row.querySelector<HTMLParagraphElement>("[data-row-error]");
+
+  row.classList.toggle("invalid", isInvalid);
+
+  if (isInvalid && !error) {
+    error = document.createElement("p");
+    error.className = "row-error";
+    error.dataset.rowError = "time";
+    error.textContent = "Початок має бути раніше за кінець.";
+    row.append(error);
+  }
+
+  if (!isInvalid) {
+    error?.remove();
+  }
+}
+
 function renderEventRow(event: ScheduleEvent, state: AppState) {
   const isInvalid = event.startTime >= event.endTime;
 
@@ -184,7 +211,7 @@ function renderEventRow(event: ScheduleEvent, state: AppState) {
         </select>
       </label>
       <button class="icon-button danger-button" type="button" data-delete-event="${event.id}" aria-label="Видалити подію" title="Видалити">×</button>
-      ${isInvalid ? `<p class="row-error">Початок має бути раніше за кінець.</p>` : ""}
+      ${isInvalid ? `<p class="row-error" data-row-error>Початок має бути раніше за кінець.</p>` : ""}
     </article>
   `;
 }

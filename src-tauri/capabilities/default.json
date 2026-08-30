@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-capability",
+  "description": "Permissions for the main Years Bell window.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    "opener:default",
+    "allow-load-state",
+    "allow-save-state",
+    "allow-import-audio-files",
+    "allow-rename-audio-file",
+    "allow-delete-audio-file"
+  ]
+}

@@ -9,6 +9,8 @@ use tauri::Manager;
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let storage = storage::Storage::new(app.handle())?;
             let state = storage.load_or_create()?;
@@ -18,7 +20,10 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::load_state,
-            commands::save_state
+            commands::save_state,
+            commands::import_audio_files,
+            commands::rename_audio_file,
+            commands::delete_audio_file
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Years Bell");

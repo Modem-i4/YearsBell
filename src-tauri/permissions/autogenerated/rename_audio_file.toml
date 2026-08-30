@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-rename-audio-file"
+description = "Enables the rename_audio_file command without any pre-configured scope."
+commands.allow = ["rename_audio_file"]
+
+[[permission]]
+identifier = "deny-rename-audio-file"
+description = "Denies the rename_audio_file command without any pre-configured scope."
+commands.deny = ["rename_audio_file"]

@@ -26,4 +26,8 @@ impl SharedAppState {
         *self.current.write().await = state.clone();
         Ok(state)
     }
+
+    pub fn storage(&self) -> &Storage {
+        &self.storage
+    }
 }

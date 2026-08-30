@@ -1,4 +1,6 @@
 import "./styles/main.css";
+import { message } from "@tauri-apps/plugin-dialog";
+import { deleteAudioFile, importAudioFiles, renameAudioFile } from "./api/tauri";
 import { loadInitialState, saveState } from "./state/appState";
 import { renderPresets } from "./components/Presets";
 import { renderSchedule } from "./components/Schedule";
@@ -50,6 +52,73 @@ function setStatus(text: string, isError = false) {
   status.classList.toggle("status-error", isError);
 }
 
+async function importAudio(paths: string[], options: { render?: boolean } = {}) {
+  const audioPaths = paths.filter((path) => /\.(mp3|wav)$/i.test(path));
+
+  if (audioPaths.length === 0) {
+    await message("Підтримуються лише .mp3 та .wav файли.", {
+      title: "Years Bell",
+      kind: "warning",
+    });
+    return;
+  }
+
+  try {
+    state = await importAudioFiles(audioPaths);
+    if (options.render ?? true) {
+      render();
+    }
+  } catch (error) {
+    await showError(error);
+  }
+}
+
+async function renameAudio(id: string, displayName: string, options: { render?: boolean } = {}) {
+  try {
+    state = await renameAudioFile(id, displayName);
+    if (options.render ?? true) {
+      render();
+    }
+  } catch (error) {
+    await showError(error);
+    if (options.render ?? true) {
+      render();
+    }
+  }
+}
+
+async function deleteAudio(id: string, options: { render?: boolean } = {}) {
+  if (isAudioUsed(id)) {
+    await message("Ця композиція використовується у пресетах або подіях. Спочатку приберіть її з усіх полів.", {
+      title: "Неможливо видалити",
+      kind: "warning",
+    });
+    return;
+  }
+
+  try {
+    state = await deleteAudioFile(id);
+    if (options.render ?? true) {
+      render();
+    }
+  } catch (error) {
+    await showError(error);
+  }
+}
+
+function isAudioUsed(id: string) {
+  return (
+    state.presets.some((preset) => Object.values(preset.sounds).includes(id)) ||
+    state.schedule.some((event) => Object.values(event.customSounds).includes(id))
+  );
+}
+
+async function showError(error: unknown) {
+  const text = error instanceof Error ? error.message : String(error);
+  setStatus(text, true);
+  await message(text, { title: "Помилка", kind: "error" });
+}
+
 function render() {
   app.innerHTML = `
     <main class="shell">
@@ -86,7 +155,11 @@ function render() {
   renderPresets({
     root: app.querySelector("[data-presets]"),
     state,
+    getState: () => state,
     onChange: updateState,
+    onImportAudio: importAudio,
+    onRenameAudio: renameAudio,
+    onDeleteAudio: deleteAudio,
   });
 
   renderSchedule({

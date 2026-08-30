@@ -73,6 +73,33 @@ impl Storage {
 
         Ok(())
     }
+
+    pub fn copy_audio_file(&self, source: &Path, stored_file_name: &str) -> Result<()> {
+        fs::create_dir_all(&self.audio_dir)
+            .with_context(|| format!("unable to create {}", self.audio_dir.display()))?;
+
+        let destination = self.audio_dir.join(stored_file_name);
+        fs::copy(source, &destination).with_context(|| {
+            format!(
+                "unable to copy audio file from {} to {}",
+                source.display(),
+                destination.display()
+            )
+        })?;
+
+        Ok(())
+    }
+
+    pub fn delete_audio_file(&self, stored_file_name: &str) -> Result<()> {
+        let path = self.audio_dir.join(stored_file_name);
+
+        if path.exists() {
+            fs::remove_file(&path)
+                .with_context(|| format!("unable to delete audio file {}", path.display()))?;
+        }
+
+        Ok(())
+    }
 }
 
 fn temp_path_for(path: &Path) -> PathBuf {
